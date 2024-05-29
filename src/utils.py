@@ -11,6 +11,8 @@ DATA_HOME = PROJ_HOME / "data"
 
 IDX_HOME = DATA_HOME / "idxs"
 
+IDX_PATH = IDX_HOME / "bm25_fulltext_zh_idxs"
+
 DOC_HOME = DATA_HOME / "docs"
 
 LEGAL_DATA_DIRPATH = DATA_HOME / "Legal_data"
