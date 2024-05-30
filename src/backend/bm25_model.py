@@ -44,6 +44,7 @@ class BM25Model:
                 hit_ids = [hit.docid.split("-")[0] for hit in hits]
                 # Deduplicate but keep the order
                 hit_ids = list(dict.fromkeys(hit_ids))
+            hit_ids = [int(id) for id in hit_ids]
             query_hit_ids_pairs.append(hit_ids)
 
         return query_hit_ids_pairs
