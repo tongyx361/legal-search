@@ -1,15 +1,43 @@
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch, re
+# from .retriever import RetrieverConfig
 
 DEVICE = 'mps'
 MODEL_PATH = "Qwen/Qwen1.5-0.5B-Chat"
 
 pattern = r'[\u4e00-\u9fff]+'
 
+class RetrieverConfig:
+    def __init__(self,
+        doc_path: str = "",
+        doc_ids_path: str = "",
+        coarse_model_path: str = "",
+        law_article_revert_index_path: str = "",
+        judge_revert_index_path: str = "",
+        expander_model_path: str = "",
+        expander_device: str = "mps",
+        max_doc_num: int = 100,
+        seg_len: int = 512,
+    ) -> None:
+        self.doc_path = doc_path
+        self.coarse_model_path = coarse_model_path
+        self.max_doc_num = max_doc_num
+        self.seg_len = seg_len
+        self.doc_ids_path = doc_ids_path
+        self.law_article_revert_index_path = law_article_revert_index_path
+        self.judge_revert_index_path = judge_revert_index_path
+        self.expander_model_path = expander_model_path
+        self.expander_device = expander_device
+
 class QueryExpander:
     def __init__(self) -> None:
         self.model = AutoModelForCausalLM.from_pretrained(MODEL_PATH, device_map=DEVICE, trust_remote_code=True)
         self.tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
+    # def __init__(self, config: RetrieverConfig):
+    #     breakpoint()
+    #     self.model = AutoModelForCausalLM.from_pretrained(config.expander_model_path, device_map=config.expander_device, trust_remote_code=True)
+    #     self.tokenizer = AutoTokenizer.from_pretrained(config.expander_model_path)
+    #     breakpoint()
     
     def expand(self, query: list[str]):
         outputs = []

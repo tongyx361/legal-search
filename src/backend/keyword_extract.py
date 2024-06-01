@@ -9,8 +9,8 @@ pattern = r'[\u4e00-\u9fff]+'
 
 
 
-def keywork_extract(query: str, k=10):
-    keywords_textrank = jieba.analyse.textrank(text, topK=20, withWeight=True)
+def keyword_extract(query: str, k=10):
+    keywords_textrank = jieba.analyse.textrank(query, topK=20, withWeight=True)
     outputs = [work for work, weight in keywords_textrank]
     return outputs
 

@@ -1,7 +1,8 @@
-from bm25_model import BM25Model
-from query_compile import QueryCompiler
+from .bm25_model import BM25Model
+from .query_compile import QueryCompiler
 import os, re
 from collections import Counter
+from .reverse_idx import ReverseIndex
 
 def reorder_ids(nums):
     count = Counter(nums)
@@ -18,6 +19,11 @@ class RetrieverConfig:
         doc_path: str = "",
         doc_ids_path: str = "",
         coarse_model_path: str = "",
+        law_article_revert_index_path: str = "",
+        judge_revert_index_path: str = "",
+        expander_model_path: str = "",
+        keyword_revert_index_path: str = "",
+        expander_device: str = "mps",
         max_doc_num: int = 100,
         seg_len: int = 512,
     ) -> None:
@@ -26,6 +32,11 @@ class RetrieverConfig:
         self.max_doc_num = max_doc_num
         self.seg_len = seg_len
         self.doc_ids_path = doc_ids_path
+        self.law_article_revert_index_path = law_article_revert_index_path
+        self.judge_revert_index_path = judge_revert_index_path
+        self.expander_model_path = expander_model_path
+        self.expander_device = expander_device
+        self.keyword_revert_index_path = keyword_revert_index_path
 
 
 class Retriever:
@@ -39,6 +50,10 @@ class Retriever:
             lines = fp.readlines()
             all_ids = [int(l.strip()) for l in lines]
         self.compiler = QueryCompiler(all_ids, self.retrieve)
+
+        self.law_article_ridx = ReverseIndex(config.law_article_revert_index_path)
+        self.judge_ridx = ReverseIndex(config.judge_revert_index_path)
+        self.query_expander = ReverseIndex(config.keyword_revert_index_path)
         return
     
     def _get_doc_by_ids(self, doc_id: int) -> str:
@@ -101,6 +116,15 @@ class Retriever:
             outputs.append(self.compiler.execute(q))
         return outputs
 
+    def query_law_article(self, query: list[str]):
+        return self.law_article_ridx.retrieve(query)
+    
+    def query_judge(self, query: list[str]):
+        return self.judge_ridx.retrieve(query)
+
+    def query_expand(self, query: list[str]):
+        return self.query_expander._retrieve_only_get_key_str(query)
+
 
             
 
@@ -110,9 +134,15 @@ if __name__ == '__main__':
         doc_path="/Users/huang-yx/Desktop/2024Spr/SearchEngine/legal-search/data/Legal_data",
         doc_ids_path="/Users/huang-yx/Desktop/2024Spr/SearchEngine/legal-search/data/test_ids.txt",
         coarse_model_path="/Users/huang-yx/Desktop/2024Spr/SearchEngine/legal-search/data/idxs/bm25_fulltext_zh_idxs",
+        keyword_revert_index_path="/Users/huang-yx/Desktop/2024Spr/SearchEngine/legal-search/data/keyword_ridx.json",
     )
 
     retriever = Retriever(config)
+
+    output = retriever.query_expand(["著作权", "土地", "婚姻法"])
+    
+
+    exit(0)
 
     # output = retriever._retrieve_text(["著作权", "土地"])
     # 武汉 土地

@@ -12,6 +12,11 @@
     ├── doc_list.txt
     ├── kw2ids.json
     ├── query2id_list.jsonl
+    ├── 法条倒排.json
+    ├── 审判长倒排.json
+    ├── keyword_ridx.json
+    ├── docs
+    ├── idxs
     └── Legal_data
 ```
 
@@ -43,6 +48,12 @@ python src/build_fulltext_docs.py \
     --seg_len 512
 ```
 
+准备倒排索引：
+```shell
+python build_reverse_idx.py
+```
+
+
 ### BM25 （中文）
 
 ```shell
@@ -56,7 +67,10 @@ bash src/encode.sh
 bash src/build_faiss_idx.sh
 ```
 
-## 搜索
+## 后端样例
 
-- 单关键词搜索：`src/search.ipynb`（测试结果为 BM25 最好，有待进一步验证）
-- 自然语言查询搜索：`src/search_query.ipynb`（测试结果为 BM25+分段最好，有待进一步验证）
+包含了后端所有功能的调用示例
+
+```shell
+python example_backend.py
+```
