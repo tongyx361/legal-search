@@ -84,7 +84,7 @@ class QueryCompiler:
         self.retrieve_func = retrieve_func
         return
 
-    def execute(self, query: str):
+    def execute(self, query: str, precise=False):
         ast = self.frontend.parse(query)
         def visit_fun(ast_node: ASTNode):
             if isinstance(ast_node, ANDNode):
@@ -101,10 +101,33 @@ class QueryCompiler:
                 ans = ast_node.child.visit(visit_fun)
                 return [x for x in self.all_ids if x not in ans]
             if isinstance(ast_node, QUERYNode):
-                ans = self.retrieve_func([ast_node.query], precise=True)[0]
+                ans = self.retrieve_func([ast_node.query], precise=precise)[0]
                 return ans
             return NotImplementedError()
         return ast.visit(visit_fun)
+
+    def filter(self, query: str, words: list[str]):
+        ast = self.frontend.parse(query)
+        def visit_fun(ast_node: ASTNode):
+            if isinstance(ast_node, ANDNode):
+                lans = ast_node.lchild.visit(visit_fun)
+                rans = ast_node.rchild.visit(visit_fun)
+                return lans and rans
+            if isinstance(ast_node, ORNode):
+                lans = ast_node.lchild.visit(visit_fun)
+                rans = ast_node.rchild.visit(visit_fun)
+                return lans or rans
+            if isinstance(ast_node, NOTNode):
+                ans = ast_node.child.visit(visit_fun)
+                return not ans
+            if isinstance(ast_node, QUERYNode):
+                for word in words:
+                    if ast_node.query in word:
+                        return True
+                return False
+            return NotImplementedError()
+        return ast.visit(visit_fun)
+        
 
 
 

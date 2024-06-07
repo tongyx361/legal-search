@@ -110,10 +110,11 @@ class Retriever:
             outputs.append(out)
         return outputs
 
-    def advanced_retrieve(self, query: list[str]) -> list[str]:
+    def advanced_retrieve(self, query: list[str], precise=False) -> list[str]:
         outputs = []
         for q in query:
-            outputs.append(self.compiler.execute(q))
+            result = self.compiler.execute(q, precise=precise)
+            outputs.append(result)
         return outputs
 
     def query_law_article(self, query: list[str]):

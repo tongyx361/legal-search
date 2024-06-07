@@ -4,3 +4,4 @@ transformers
 tqdm
 jieba-0.42.1
 gensim
+flask
