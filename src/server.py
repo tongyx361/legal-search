@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 from backend import Retriever, RetrieverConfig, keyword_extract, DocEntry
 import time, re
+import multiprocessing
 
 # 设置config
 config = RetrieverConfig(
@@ -22,35 +23,6 @@ extractor = keyword_extract
 
 app = Flask(__name__)
 
-users = {}
-
-@app.route('/')
-def home():
-    return "Hello, Flask!"
-
-@app.route('/register', methods=['POST'])
-def register():
-    data = request.json
-    username = data.get('username')
-    password = data.get('password')
-    
-    if username in users:
-        return jsonify({"message": "User already exists"}), 400
-    
-    users[username] = password
-    return jsonify({"message": "User registered successfully"}), 201
-
-@app.route('/login', methods=['POST'])
-def login():
-    data = request.json
-    username = data.get('username')
-    password = data.get('password')
-    
-    if users.get(username) != password:
-        return jsonify({"message": "Invalid credentials"}), 401
-    
-    return jsonify({"message": "Login successful"}), 200
-
 
 
 
@@ -62,15 +34,24 @@ def query_process():
         mode: str = str(data.get('mode')).strip() # accurate / blurred
         judge: str = str(data.get('judge')).strip() # 法官
         law: str = str(data.get('law')).strip() # 法条
+        # 返回[beg, end)的记录
+        beg: int = int(data.get('begin'))
+        end: int = int(data.get('end'))
+        if beg < 0:
+            beg = 1000000
+        if end < 0:
+            end = 1000000
+        
 
         precise = (mode == "accurate")
+
+        buffer_key = (query, mode, judge, law)
 
         # process text query
         if len(query) > 0:
             doc_ids = retriever.advanced_retrieve([query], precise=precise)
         else:
             doc_ids = [[]]
-        
 
         keywords = re.split(r'\s*(AND|OR|NOT)\s*', query)
         keywords = [p for p in keywords if p.strip()]
@@ -78,7 +59,9 @@ def query_process():
         # build DocEntry instances
         # filter judge and law
         query_results = []
-        for id in doc_ids[0]:
+        idxs = []
+
+        for i, id in enumerate(doc_ids[0][beg:end]):
             try:
                 res = DocEntry(config, id)
             except:
@@ -89,14 +72,19 @@ def query_process():
                 if not judge_fit:
                     continue
             if len(law) > 0:
-                law_fit = retriever.compiler.filter(law_fit, res.laws)
+                law_fit = retriever.compiler.filter(law, res.laws)
                 if not law_fit:
                     continue
             res.set_highlights(keywords)
             query_results.append(res)
+            idxs.append(i + beg)
 
         query_results = [q.serialize() for q in query_results]
-        return jsonify(query_results), 200
+        return jsonify({
+            "results": query_results,
+            "index": idxs,
+            "total_num": len(doc_ids[0]),
+        }), 200
     except Exception as e:
         print(e)
         return jsonify({"message": "unknown error"}), 401
@@ -106,10 +94,18 @@ def query_judge():
     try:
         data = request.json
         query: str = str(data.get('query')).strip()
+        # 返回[beg, end)的记录
+        beg: int = int(data.get('begin'))
+        end: int = int(data.get('end'))
+        if beg < 0:
+            beg = 1000000
+        if end < 0:
+            end = 1000000
 
         doc_ids = retriever.query_judge([query])
         query_results = []
-        for id in doc_ids[0]:
+        idxs = []
+        for i, id in enumerate(doc_ids[0][beg:end]):
             try:
                 res = DocEntry(config, id)
             except:
@@ -117,23 +113,36 @@ def query_judge():
                 continue
             res.set_highlights([query])
             query_results.append(res)
+            idxs.append(i + beg)
 
         query_results = [q.serialize() for q in query_results]
-        return jsonify(query_results), 200      
+        return jsonify({
+            "results": query_results,
+            "index": idxs,
+            "total_num": len(doc_ids[0]),
+        }), 200 
 
     except Exception as e:
         print(e)
         return jsonify({"message": "unknown error"}), 401
 
 @app.route('/query-laws')
-def query_judge():
+def query_laws():
     try:
         data = request.json
         query: str = str(data.get('query')).strip()
+        # 返回[beg, end)的记录
+        beg: int = int(data.get('begin'))
+        end: int = int(data.get('end'))
+        if beg < 0:
+            beg = 1000000
+        if end < 0:
+            end = 1000000
 
         doc_ids = retriever.query_law_article([query])
         query_results = []
-        for id in doc_ids[0]:
+        idxs = []
+        for i, id in enumerate(doc_ids[0][beg:end]):
             try:
                 res = DocEntry(config, id)
             except:
@@ -141,9 +150,14 @@ def query_judge():
                 continue
             res.set_highlights([query])
             query_results.append(res)
+            idxs.append(i + beg)
 
         query_results = [q.serialize() for q in query_results]
-        return jsonify(query_results), 200      
+        return jsonify({
+            "results": query_results,
+            "index": idxs,
+            "total_num": len(doc_ids[0]),
+        }), 200 
 
     except Exception as e:
         print(e)
@@ -167,4 +181,4 @@ def expand():
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5678)
