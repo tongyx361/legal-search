@@ -67,6 +67,8 @@ bash src/encode.sh
 bash src/build_faiss_idx.sh
 ```
 
+https://cloud.tsinghua.edu.cn/d/c0f715a9078e4d38b36a/?p=%2F%E5%8F%B8%E6%B3%95%E6%90%9C%E7%B4%A2%E5%BC%95%E6%93%8E
+
 ## 后端样例
 
 包含了后端所有功能的调用示例
