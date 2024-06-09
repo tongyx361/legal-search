@@ -2,6 +2,7 @@ data/docs
 data/embeds
 data/idxs
 data/Legal_data
+data/*
 
 init.sh
 
