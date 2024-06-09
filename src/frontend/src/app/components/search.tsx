@@ -99,7 +99,7 @@ export const Search: FC = () => {
 
       if (response.ok) {
         const data = await response.json();
-        // console.log("Related queries:", data.results);
+        console.log("Related queries:", data.results);
         setRelatedQueries(data.results);
       } else {
         console.error("Failed to fetch related queries");
@@ -156,6 +156,7 @@ export const Search: FC = () => {
   }, [debouncedValue, searchField]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    console.log("inside");
     e.preventDefault();
     if (value) {
       setResults([]);
@@ -164,7 +165,7 @@ export const Search: FC = () => {
       let apiUrl: string = rootUrl;
       let requestData: { [key: string]: any } = {};
       let ndoc =
-        !fuzzySearch || judgeFilter.length > 0 || lawFilter.length > 0 ? 1 : 20;
+        !fuzzySearch || judgeFilter.length > 0 || lawFilter.length > 0 ? 1 : 2;
       let total_num: number = 0;
 
       switch (searchField) {
@@ -199,8 +200,10 @@ export const Search: FC = () => {
           break;
       }
 
+      let end_search = false;
       try {
         do {
+          console.log("index:", requestData['index']);
           const response = await fetch(apiUrl, {
             method: "POST",
             headers: {
@@ -214,10 +217,16 @@ export const Search: FC = () => {
           if (response.ok) {
             const data = await response.json();
             const newResults = data.results;
-            setSearchFinished(data.results.length === 0);
+            if (data.index.length === 0)
+              end_search = true;
+            // setSearchFinished(data.results.length === 0);
             // Update results state
             setResults((prevResults) => [...prevResults, ...newResults]);
-            requestData.index = data.index.pop() + 1;
+            console.log("index_len:", data.index.length);
+            console.log("res_len:", data.results.length);
+            if (data.index.length > 0)
+              requestData.index = data.index.pop() + 1;
+            requestData.ndoc = 2 * requestData.ndoc;
             total_num = data.total_num;
             // console.log("results.length:", results.length);
             // console.log("requestData.index:", requestData.index);
@@ -227,7 +236,8 @@ export const Search: FC = () => {
             break;
           }
           console.log("searchFinished:", searchFinished);
-        } while (searchFinished);
+          console.log("keep search:", !searchFinished);
+        } while (!end_search);
         // console.log("searchFinished:", searchFinished);
       } catch (error) {
         console.error("Error fetching results:", error);
