@@ -28,7 +28,7 @@ export const Logo: FC = () => {
         </svg>
       </div>
       <div className="relative text-nowrap text-center text-2xl font-medium text-zinc-950 md:text-3xl">
-        司法文书搜索
+        司法文书检索
       </div>
       <div className="origin-left scale-75 transform items-center rounded-lg border bg-gray-100 px-2 py-1 text-xs font-medium text-zinc-600">
         测试版

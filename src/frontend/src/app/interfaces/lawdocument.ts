@@ -5,4 +5,5 @@ export default interface LawDocument {
   judges: string[];
   keywords: string[];
   highlights: string[];
+  expanded: boolean;
 }
