@@ -246,6 +246,7 @@ export const Search: FC = () => {
             const newResults = data.results;
             if (data.index.length === 0)
               end_search = true;
+              setSearchFinished(true);
             // setSearchFinished(data.results.length === 0);
             // Update results state
             setResults((prevResults) => [...prevResults, ...newResults]);
