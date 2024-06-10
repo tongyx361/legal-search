@@ -37,7 +37,7 @@ const ToggleButton: FC<ToggleButtonProps> = ({ mode, isActive, onClick }) => {
 const fullRelatedQueries = [
   "婚姻法",
   "浙江润杭律师事务所",
-  "婚姻法 AND 浙江润杭律师事务所 NOT 刑法",
+  "婚姻法 AND (浙江润杭律师事务所 AND NOT 刑法)",
   "有关机关和组织编印的仅供领导部门内部参阅的刊物、资料等刊登来信或者文章引起的名誉权纠纷，以及机关、社会团体、学术机构、企事业单位分发本单位、本系统或者其他一定范围内的一般内部刊物和内部资料所载内容引起的名誉权纠纷",
 ];
 
@@ -65,8 +65,8 @@ export const Search: FC = () => {
             onClick={() => {
               // 修改 textarea 的值
               if (textareaRef.current) {
-                textareaRef.current!.value +=
-                  textareaRef.current!.value === "" ? query : ` ${query}`;
+                textareaRef.current!.value = query;
+                  // textareaRef.current!.value === "" ? query : ` ${query}`;
                 // 创建模拟的 ChangeEvent 对象
                 const event = new Event("input", { bubbles: true });
                 Object.defineProperty(event, "target", {
@@ -87,7 +87,14 @@ export const Search: FC = () => {
     );
   };
 
+  const checkIfChinese = (text: string) => {
+    const chineseRegex = /^[\u4e00-\u9fa5\sANDORNOT]+$/;
+    return chineseRegex.test(text);
+  };
+
   const fetchRelatedQueries = async (query: string) => {
+    if (!checkIfChinese(query))
+      return;
     try {
       const response = await fetch(rootUrl + "/expand", {
         method: "POST",
@@ -100,7 +107,8 @@ export const Search: FC = () => {
       if (response.ok) {
         const data = await response.json();
         console.log("Related queries:", data.results);
-        setRelatedQueries(data.results);
+        if (textareaRef.current?.value !== "")
+          setRelatedQueries(data.results);
       } else {
         console.error("Failed to fetch related queries");
       }
@@ -129,6 +137,9 @@ export const Search: FC = () => {
 
   // 监听文本框输入事件，动态改变文本框的高度
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    if (e.target.value === ""){
+      setRelatedQueries([]);
+    }
     setValue(e.target.value);
     const textarea = e.target;
     textarea.style.height = "1.5rem";
@@ -136,22 +147,38 @@ export const Search: FC = () => {
   };
 
   useEffect(() => {
+    console.log("debouncedValue: ", debouncedValue);
     if (debouncedValue === "") {
       switch (searchField) {
         case "全文":
           setRelatedQueries(fullRelatedQueries);
           break;
         case "法官":
-          setRelatedQueries(["张三", "张三 AND 李四 OR 王五 NOT 赵六"]);
+          setRelatedQueries(["张三", "李四"]);
           break;
         case "法条":
           setRelatedQueries([
             "婚姻法",
-            "婚姻法 AND 民法典 OR 民法总则 NOT 刑法",
+            "刑法",
           ]);
           break;
       }
-    } else fetchRelatedQueries(debouncedValue);
+    } else {
+      switch (searchField) {
+        case "全文":
+          fetchRelatedQueries(debouncedValue);
+          break;
+        case "法官":
+          setRelatedQueries(["张三", "李四"]);
+          break;
+        case "法条":
+          setRelatedQueries([
+            "婚姻法",
+            "刑法",
+          ]);
+          break;
+      }
+    }
     // console.log("Debounced value:", debouncedValue);
   }, [debouncedValue, searchField]);
 
@@ -222,8 +249,6 @@ export const Search: FC = () => {
             // setSearchFinished(data.results.length === 0);
             // Update results state
             setResults((prevResults) => [...prevResults, ...newResults]);
-            console.log("index_len:", data.index.length);
-            console.log("res_len:", data.results.length);
             if (data.index.length > 0)
               requestData.index = data.index.pop() + 1;
             requestData.ndoc = 2 * requestData.ndoc;
@@ -270,7 +295,7 @@ export const Search: FC = () => {
             isActive={searchField === "法官"}
             onClick={() => {
               setSearchField("法官");
-              setRelatedQueries(["张三", "张三 AND 李四 OR 王五 NOT 赵六"]);
+              setRelatedQueries(["张三", "李四"]);
             }}
           />
           <ToggleButton
@@ -280,7 +305,7 @@ export const Search: FC = () => {
               setSearchField("法条");
               setRelatedQueries([
                 "婚姻法",
-                "婚姻法 AND 民法典 OR 民法总则 NOT 刑法",
+                "刑法",
               ]);
             }}
           />
@@ -311,13 +336,15 @@ export const Search: FC = () => {
                 placeholder="关键词/短句/长文本/表达式"
                 className={`h-6 max-h-60 min-h-6 w-full flex-1 resize-y rounded-md bg-white px-2 pr-6 outline-none`}
               />
-              <button
-                type="button"
-                className="inline-flex h-6 items-center justify-center rounded-md border border-gray-300 bg-white px-2 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                onClick={() => setFuzzySearch(!fuzzySearch)}
-              >
-                {fuzzySearch ? "模糊" : "精确"}
-              </button>
+              {searchField === "全文" && (
+                <button
+                  type="button"
+                  className="inline-flex h-6 items-center justify-center rounded-md border border-gray-300 bg-white px-2 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                  onClick={() => setFuzzySearch(!fuzzySearch)}
+                >
+                  {fuzzySearch ? "模糊" : "精确"}
+                </button>
+              )}
               <button
                 type="submit"
                 className="relative w-auto overflow-hidden rounded-xl border border-black bg-black fill-white px-2 py-1 text-white active:scale-95"
