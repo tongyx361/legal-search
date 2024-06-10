@@ -1,4 +1,3 @@
-import LawDocument from "@/app/interfaces/lawdocument";
 import {
   Annoyed,
   ArrowRight,
@@ -10,45 +9,32 @@ import {
 } from "lucide-react";
 import { FC, useEffect, useRef, useState } from "react";
 
+// Environment variables
 const rootUrl: string =
-  process.env.NEXT_PUBLIC_ROOT_URL?.toString() || "http://localhost:8000";
+  process.env.NEXT_PUBLIC_ROOT_URL?.toString() || "http://localhost:5678";
 
 const queryExpasionDelay: number = process.env
   .NEXT_PUBLIC_QUERY_EXPANSION_DELAY_MS
   ? Number(process.env.NEXT_PUBLIC_QUERY_EXPANSION_DELAY_MS)
-  : 300; // 默认值
+  : 300;
 
 const nItemsPerPage: number = process.env.NEXT_PUBLIC_N_ITEMS_PER_PAGE
   ? Number(process.env.NEXT_PUBLIC_N_ITEMS_PER_PAGE)
-  : 10; // 默认值
+  : 10;
 
-interface ToggleButtonProps {
-  mode: string;
-  isActive: boolean;
-  onClick: () => void;
+// Interfaces
+interface LawDocument {
+  title: string;
+  full: string;
+  laws: string[];
+  judges: string[];
+  keywords: string[];
+  highlights: string[];
+  expanded: boolean;
 }
 
-const ToggleButton: FC<ToggleButtonProps> = ({ mode, isActive, onClick }) => {
-  return (
-    <button
-      role="switch"
-      aria-checked={isActive}
-      className={`rounded-t-lg px-4 py-2 ${isActive ? "bg-black text-white" : ""}`}
-      onClick={onClick}
-    >
-      {mode}
-    </button>
-  );
-};
-
-const fullRelatedQueries = [
-  "婚姻法",
-  "浙江润杭律师事务所",
-  "婚姻法 AND (浙江润杭律师事务所 AND NOT 刑法)",
-  "有关机关和组织编印的仅供领导部门内部参阅的刊物、资料等刊登来信或者文章引起的名誉权纠纷，以及机关、社会团体、学术机构、企事业单位分发本单位、本系统或者其他一定范围内的一般内部刊物和内部资料所载内容引起的名誉权纠纷",
-];
-
 export const Search: FC = () => {
+  // State variables
   const [value, setValue] = useState("");
   const [searchField, setSearchField] = useState("全文"); // 默认选择全文搜索字段
   const [fuzzySearch, setFuzzySearch] = useState(true); // 是否精确搜索
@@ -59,12 +45,54 @@ export const Search: FC = () => {
   const [relatedQueries, setRelatedQueries] = useState<string[]>([]); // 相关搜索词
   const [searchFinished, setSearchFinished] = useState(false); // 搜索是否完成
   const [searchError, setSearchError] = useState(0); // 搜索错误
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [file, setFile] = useState<File | null>(null);
   const [fileContent, setFileContent] = useState(true);
   const [fileName, setFileName] = useState<string>("");
 
+  // References
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Components and utilies
+
+  const ToggleButton: FC<{
+    mode: string;
+    isActive: boolean;
+    onClick: () => void;
+  }> = ({ mode, isActive, onClick }) => {
+    return (
+      <button
+        role="switch"
+        aria-checked={isActive}
+        className={`rounded-t-lg px-4 py-2 ${isActive ? "bg-black text-white" : ""}`}
+        onClick={onClick}
+      >
+        {mode}
+      </button>
+    );
+  };
+
+  // Dynamic textarea height
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setFileContent(false);
+    setValue(e.target.value);
+    const textarea = e.target;
+    textarea.style.height = "1.5rem";
+    textarea.style.height = textarea.scrollHeight + "px";
+  };
+
+  // Query recommendation and expansion
+
+  const fullRelatedQueries = [
+    "婚姻法",
+    "婚姻法 AND 浙江润杭律师事务所",
+    "婚姻法 AND 浙江润杭律师事务所 AND NOT 2016",
+  ];
+
+  const judgeRelatedQueries = ["夏明贵", "夏明贵 王杨沁如"];
+
+  const lawRelatedQueries = ["中华人民共和国民事诉讼法", "民事诉讼法 合同法"];
 
   const QueryContainer: FC<{ queries: string[] }> = ({ queries }) => {
     return (
@@ -74,17 +102,15 @@ export const Search: FC = () => {
             key={index}
             className="flex-initial flex-wrap items-center justify-center rounded-lg border border-gray-200 bg-white p-2 text-xs font-medium text-gray-700 shadow-md hover:bg-gray-50 hover:text-gray-900"
             onClick={() => {
-              // 修改 textarea 的值
               if (textareaRef.current) {
-                textareaRef.current!.value = query;
-                // textareaRef.current!.value === "" ? query : ` ${query}`;
-                // 创建模拟的 ChangeEvent 对象
+                textareaRef.current!.value = query; // Replace
+                // textareaRef.current!.value +=
+                // textareaRef.current!.value === "" ? query : ` ${query}`; // Append
                 const event = new Event("input", { bubbles: true });
                 Object.defineProperty(event, "target", {
                   value: textareaRef.current,
                 });
 
-                // 手动触发 handleInputChange
                 handleInputChange(
                   event as unknown as React.ChangeEvent<HTMLTextAreaElement>,
                 );
@@ -126,6 +152,8 @@ export const Search: FC = () => {
     }
   };
 
+  // Debounce
+
   const useDebounce = (value: any, delay: number) => {
     const [debouncedValue, setDebouncedValue] = useState(value);
 
@@ -142,19 +170,7 @@ export const Search: FC = () => {
     return debouncedValue;
   };
 
-  const debouncedValue = useDebounce(value, queryExpasionDelay); // 500ms 的防抖延迟
-
-  // 监听文本框输入事件，动态改变文本框的高度
-  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setFileContent(false);
-    if (e.target.value === "") {
-      setRelatedQueries([]);
-    }
-    setValue(e.target.value);
-    const textarea = e.target;
-    textarea.style.height = "1.5rem";
-    textarea.style.height = textarea.scrollHeight + "px";
-  };
+  const debouncedValue = useDebounce(value, queryExpasionDelay);
 
   useEffect(() => {
     console.log("debouncedValue: ", debouncedValue);
@@ -163,27 +179,17 @@ export const Search: FC = () => {
         case "全文":
           setRelatedQueries(fullRelatedQueries);
           break;
-        case "法官":
-          setRelatedQueries(["张三", "李四"]);
+        case "法官（模糊）":
+          setRelatedQueries(judgeRelatedQueries);
           break;
-        case "法条":
-          setRelatedQueries(["婚姻法", "刑法"]);
+        case "法条（模糊）":
+          setRelatedQueries(lawRelatedQueries);
           break;
       }
     } else {
-      if (!fileContent)
-        switch (searchField) {
-          case "全文":
-            fetchRelatedQueries(debouncedValue);
-            break;
-          case "法官":
-            setRelatedQueries(["张三", "李四"]);
-            break;
-          case "法条":
-            setRelatedQueries(["婚姻法", "刑法"]);
-            break;
-        }
-      else setRelatedQueries([]);
+      if (!fileContent) {
+        if (searchField === "全文") fetchRelatedQueries(debouncedValue);
+      } else setRelatedQueries([]);
     }
     // console.log("Debounced value:", debouncedValue);
   }, [debouncedValue, searchField]);
@@ -196,6 +202,7 @@ export const Search: FC = () => {
       setResults([]);
       setSearchFinished(false);
       setSearchError(0);
+      setCurrentPage(1);
       let apiUrl: string = rootUrl;
       let requestData: { [key: string]: any } = {};
       let ndoc =
@@ -219,7 +226,7 @@ export const Search: FC = () => {
             ndoc: ndoc,
           };
           break;
-        case "法官":
+        case "法官（模糊）":
           apiUrl += "/query-judge";
           requestData = {
             query: value,
@@ -227,7 +234,7 @@ export const Search: FC = () => {
             ndoc: ndoc,
           };
           break;
-        case "法条":
+        case "法条（模糊）":
           apiUrl += "/query-laws";
           requestData = {
             query: value,
@@ -242,7 +249,7 @@ export const Search: FC = () => {
       let end_search = false;
       try {
         do {
-          console.log("index:", requestData["index"]);
+          console.log("requestData:", requestData);
           const response = await fetch(apiUrl, {
             method: "POST",
             headers: {
@@ -307,11 +314,8 @@ export const Search: FC = () => {
     reader.readAsText(file);
   };
 
-  // LawDoc component to display a single law document
-  const LawDoc: FC<{ document: LawDocument; index: number }> = ({
-    document,
-    index,
-  }) => {
+  // Component to display a single law document
+  const LawDoc: FC<{ document: LawDocument }> = ({ document }) => {
     const [expanded, setExpanded] = useState(document.expanded);
 
     const CustomList: FC<{
@@ -368,6 +372,109 @@ export const Search: FC = () => {
       return { __html: highlightedText };
     };
 
+    const SimilarSearch: FC = () => {
+      return (
+        <div className="flex">
+          <button
+            className="m-2 flex items-center rounded-md border bg-green-200 p-2"
+            onClick={() => {
+              setSearchField("全文");
+              textareaRef.current!.value = document.full;
+              const eInput = new Event("input", { bubbles: true });
+              Object.defineProperty(eInput, "target", {
+                value: textareaRef.current,
+              });
+              handleInputChange(
+                eInput as unknown as React.ChangeEvent<HTMLTextAreaElement>,
+              );
+              setFuzzySearch(true);
+              setJudgeFilter("");
+              setLawFilter("");
+              setFilterOpen(false);
+              const eSubmit = new Event("submit", { bubbles: true });
+              handleSubmit(
+                eSubmit as unknown as React.FormEvent<HTMLFormElement>,
+              );
+            }}
+          >
+            相似案例
+          </button>
+          <button
+            className="m-2 flex items-center rounded-md border bg-blue-200 p-2"
+            onClick={() => {
+              setSearchField("法官（模糊）");
+              textareaRef.current!.value = document.judges.join(" ");
+              const eInput = new Event("input", { bubbles: true });
+              Object.defineProperty(eInput, "target", {
+                value: textareaRef.current,
+              });
+              handleInputChange(
+                eInput as unknown as React.ChangeEvent<HTMLTextAreaElement>,
+              );
+              setFuzzySearch(true);
+              setJudgeFilter("");
+              setLawFilter("");
+              setFilterOpen(false);
+              const eSubmit = new Event("submit", { bubbles: true });
+              handleSubmit(
+                eSubmit as unknown as React.FormEvent<HTMLFormElement>,
+              );
+            }}
+          >
+            相似法官案例
+          </button>
+          <button
+            className="m-2 flex items-center rounded-md border bg-teal-200 p-2"
+            onClick={() => {
+              setSearchField("法条（模糊）");
+              textareaRef.current!.value = document.laws.join(" ");
+              const eInput = new Event("input", { bubbles: true });
+              Object.defineProperty(eInput, "target", {
+                value: textareaRef.current,
+              });
+              handleInputChange(
+                eInput as unknown as React.ChangeEvent<HTMLTextAreaElement>,
+              );
+              setFuzzySearch(true);
+              setJudgeFilter("");
+              setLawFilter("");
+              setFilterOpen(false);
+              const eSubmit = new Event("submit", { bubbles: true });
+              handleSubmit(
+                eSubmit as unknown as React.FormEvent<HTMLFormElement>,
+              );
+            }}
+          >
+            相似法条案例
+          </button>
+        </div>
+      );
+    };
+
+    const ExpandButton: FC = () => {
+      return (
+        <button
+          className="mt-2 flex items-center text-blue-500"
+          onClick={() => {
+            setExpanded(!expanded);
+            document.expanded = !document.expanded;
+          }}
+        >
+          {expanded ? (
+            <>
+              收起全文
+              <ChevronUp />
+            </>
+          ) : (
+            <>
+              展开全文
+              <ChevronDown />
+            </>
+          )}
+        </button>
+      );
+    };
+
     return (
       <div className="mb-4 flex flex-col items-center rounded-md border border-gray-300 bg-gray-50 p-4">
         <div
@@ -393,144 +500,43 @@ export const Search: FC = () => {
         </div>
         {expanded && (
           <>
-            {" "}
-            <button
-              className="mt-2 flex items-center text-blue-500"
-              onClick={() => {
-                setExpanded(!expanded);
-                document.expanded = !document.expanded;
-              }}
-            >
-              {expanded ? (
-                <>
-                  收起全文
-                  <ChevronUp />
-                </>
-              ) : (
-                <>
-                  展开全文
-                  <ChevronDown />
-                </>
-              )}
-            </button>{" "}
+            <SimilarSearch />
+            <ExpandButton />
             <div
               className="m-2 w-full rounded-md border bg-white p-2 text-sm leading-6"
               dangerouslySetInnerHTML={highlightKeywords(
                 document.full,
                 document.highlights,
               )}
-            />
-            <div className="flex">
-              <button
-                className="m-2 flex items-center rounded-md border bg-green-200 p-2"
-                onClick={() => {
-                  setSearchField("全文");
-                  textareaRef.current!.value = document.full;
-                  const eInput = new Event("input", { bubbles: true });
-                  Object.defineProperty(eInput, "target", {
-                    value: textareaRef.current,
-                  });
-                  handleInputChange(
-                    eInput as unknown as React.ChangeEvent<HTMLTextAreaElement>,
-                  );
-                  setFuzzySearch(true);
-                  setJudgeFilter("");
-                  setLawFilter("");
-                  setFilterOpen(false);
-                  const eSubmit = new Event("submit", { bubbles: true });
-                  handleSubmit(
-                    eSubmit as unknown as React.FormEvent<HTMLFormElement>,
-                  );
-                }}
-              >
-                相似案例
-              </button>
-              <button
-                className="m-2 flex items-center rounded-md border bg-blue-200 p-2"
-                onClick={() => {
-                  setSearchField("法官");
-                  textareaRef.current!.value = document.judges.join(" OR ");
-                  const eInput = new Event("input", { bubbles: true });
-                  Object.defineProperty(eInput, "target", {
-                    value: textareaRef.current,
-                  });
-                  handleInputChange(
-                    eInput as unknown as React.ChangeEvent<HTMLTextAreaElement>,
-                  );
-                  setFuzzySearch(true);
-                  setJudgeFilter("");
-                  setLawFilter("");
-                  setFilterOpen(false);
-                  const eSubmit = new Event("submit", { bubbles: true });
-                  handleSubmit(
-                    eSubmit as unknown as React.FormEvent<HTMLFormElement>,
-                  );
-                }}
-              >
-                相似法官案例
-              </button>
-              <button
-                className="m-2 flex items-center rounded-md border bg-teal-200 p-2"
-                onClick={() => {
-                  setSearchField("法条");
-                  textareaRef.current!.value = document.laws.join(" OR ");
-                  const eInput = new Event("input", { bubbles: true });
-                  Object.defineProperty(eInput, "target", {
-                    value: textareaRef.current,
-                  });
-                  handleInputChange(
-                    eInput as unknown as React.ChangeEvent<HTMLTextAreaElement>,
-                  );
-                  setFuzzySearch(true);
-                  setJudgeFilter("");
-                  setLawFilter("");
-                  setFilterOpen(false);
-                  const eSubmit = new Event("submit", { bubbles: true });
-                  handleSubmit(
-                    eSubmit as unknown as React.FormEvent<HTMLFormElement>,
-                  );
-                }}
-              >
-                相似法条案例
-              </button>
-            </div>
+            ></div>
           </>
         )}
-        <button
-          className="mt-2 flex items-center text-blue-500"
-          onClick={() => {
-            setExpanded(!expanded);
-            document.expanded = !document.expanded;
-          }}
-        >
-          {expanded ? (
-            <>
-              收起全文
-              <ChevronUp />
-            </>
-          ) : (
-            <>
-              展开全文
-              <ChevronDown />
-            </>
-          )}
-        </button>
+        <SimilarSearch />
+        <ExpandButton />
       </div>
     );
   };
 
-  // LawDocs component with pagination
+  // Component of search results with pagination
   const LawDocs: FC<{ documents: LawDocument[]; itemsPerPage: number }> = ({
     documents,
     itemsPerPage,
   }) => {
-    const [currentPage, setCurrentPage] = useState(1);
     const totalPages = Math.ceil(documents.length / itemsPerPage);
     const paginationRef = useRef<HTMLDivElement>(null);
 
     const indexOfLastItem = currentPage * itemsPerPage;
     const indexOfFirstItem = indexOfLastItem - itemsPerPage;
     const currentItems = documents.slice(indexOfFirstItem, indexOfLastItem);
+
+    const handlePageChange = (pageNumber: number) => {
+      setCurrentPage(pageNumber);
+      paginationRef.current?.scrollIntoView({ behavior: "smooth" });
+    };
+
+    useEffect(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }, [currentPage]);
 
     // Pagination component
     const Pagination: FC<{
@@ -594,15 +600,6 @@ export const Search: FC = () => {
       );
     };
 
-    const handlePageChange = (pageNumber: number) => {
-      setCurrentPage(pageNumber);
-      paginationRef.current?.scrollIntoView({ behavior: "smooth" });
-    };
-
-    useEffect(() => {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }, [currentPage]);
-
     return (
       <div className="flex w-full flex-col gap-4">
         <div className="flex gap-2 text-blue-500">
@@ -623,7 +620,7 @@ export const Search: FC = () => {
             </div>
             {currentItems.map((document, index) => (
               <div key={index} className="mb-2">
-                <LawDoc document={document} index={indexOfFirstItem + index} />
+                <LawDoc document={document} />
               </div>
             ))}
             <Pagination
@@ -637,6 +634,7 @@ export const Search: FC = () => {
     );
   };
 
+  // Main search bar component
   return (
     <div className="relative flex w-5/6 flex-col items-center justify-center">
       <div
@@ -646,7 +644,7 @@ export const Search: FC = () => {
         <div
           role="group"
           aria-label="搜索字段"
-          className="mb-2 w-48 flex-auto gap-4 rounded-t-lg bg-gray-200"
+          className="mb-2 w-80 flex-row flex-nowrap gap-4 rounded-t-lg bg-gray-200"
         >
           <ToggleButton
             mode="全文"
@@ -657,19 +655,19 @@ export const Search: FC = () => {
             }}
           />
           <ToggleButton
-            mode="法官"
-            isActive={searchField === "法官"}
+            mode="法官（模糊）"
+            isActive={searchField === "法官（模糊）"}
             onClick={() => {
-              setSearchField("法官");
-              setRelatedQueries(["张三", "李四"]);
+              setSearchField("法官（模糊）");
+              setRelatedQueries(judgeRelatedQueries);
             }}
           />
           <ToggleButton
-            mode="法条"
-            isActive={searchField === "法条"}
+            mode="法条（模糊）"
+            isActive={searchField === "法条（模糊）"}
             onClick={() => {
-              setSearchField("法条");
-              setRelatedQueries(["婚姻法", "刑法"]);
+              setSearchField("法条（模糊）");
+              setRelatedQueries(lawRelatedQueries);
             }}
           />
         </div>
@@ -683,7 +681,7 @@ export const Search: FC = () => {
                   className="w-17 inline-flex h-6 items-center justify-center rounded-md border border-gray-300 bg-white px-2 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                   onClick={() => setFilterOpen(!filterOpen)}
                 >
-                  过滤
+                  精确过滤
                   {filterOpen ? (
                     <ChevronDown size={16} />
                   ) : (
@@ -744,7 +742,7 @@ export const Search: FC = () => {
                   <span className="min-w-[4rem]">法官：</span>
                   <input
                     type="text"
-                    placeholder="张三 李四"
+                    placeholder="张三 AND 李四"
                     className="w-full rounded-md border px-2 py-1"
                     value={judgeFilter}
                     onChange={(e) => setJudgeFilter(e.target.value)}
@@ -754,7 +752,7 @@ export const Search: FC = () => {
                   <span className="min-w-[4rem]">法条：</span>
                   <input
                     type="text"
-                    placeholder="民法典 婚姻法"
+                    placeholder="婚姻法 AND 诉讼法"
                     className="w-full rounded-md border px-2 py-1"
                     value={lawFilter}
                     onChange={(e) => setLawFilter(e.target.value)}
