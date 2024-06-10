@@ -1,6 +1,6 @@
 import LawDocs from "@/app/components/lawdocs";
 import LawDocument from "@/app/interfaces/lawdocument";
-import { Annoyed, ArrowRight, ChevronDown, ChevronRight } from "lucide-react";
+import { Annoyed, ArrowRight, ChevronDown, ChevronRight, Upload } from "lucide-react";
 import { FC, useEffect, useRef, useState } from "react";
 
 const rootUrl: string =
@@ -52,6 +52,10 @@ export const Search: FC = () => {
   const [relatedQueries, setRelatedQueries] = useState<string[]>([]); // 相关搜索词
   const [searchFinished, setSearchFinished] = useState(false); // 搜索是否完成
   const [searchError, setSearchError] = useState(0); // 搜索错误
+
+  const [file, setFile] = useState<File | null>(null);
+  const [fileContent, setFileContent] = useState(true);
+  const [fileName, setFileName] = useState<string>("");
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -137,6 +141,7 @@ export const Search: FC = () => {
 
   // 监听文本框输入事件，动态改变文本框的高度
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setFileContent(false);
     if (e.target.value === ""){
       setRelatedQueries([]);
     }
@@ -164,25 +169,29 @@ export const Search: FC = () => {
           break;
       }
     } else {
-      switch (searchField) {
-        case "全文":
-          fetchRelatedQueries(debouncedValue);
-          break;
-        case "法官":
-          setRelatedQueries(["张三", "李四"]);
-          break;
-        case "法条":
-          setRelatedQueries([
-            "婚姻法",
-            "刑法",
-          ]);
-          break;
-      }
+      if (!fileContent)
+        switch (searchField) {
+          case "全文":
+            fetchRelatedQueries(debouncedValue);
+            break;
+          case "法官":
+            setRelatedQueries(["张三", "李四"]);
+            break;
+          case "法条":
+            setRelatedQueries([
+              "婚姻法",
+              "刑法",
+            ]);
+            break;
+        }
+      else
+        setRelatedQueries([]);
     }
     // console.log("Debounced value:", debouncedValue);
   }, [debouncedValue, searchField]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    console.log("file: ", fileContent);
     console.log("inside");
     e.preventDefault();
     if (value) {
@@ -192,7 +201,7 @@ export const Search: FC = () => {
       let apiUrl: string = rootUrl;
       let requestData: { [key: string]: any } = {};
       let ndoc =
-        !fuzzySearch || judgeFilter.length > 0 || lawFilter.length > 0 ? 1 : 2;
+        !fuzzySearch || judgeFilter.length > 0 || lawFilter.length > 0 || fileContent ? 1 : 2;
       let total_num: number = 0;
 
       switch (searchField) {
@@ -272,6 +281,30 @@ export const Search: FC = () => {
     }
   };
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files)
+      return;
+    if (e.target.files.length === 0)
+      return;
+    setFile(e.target.files[0]);
+    getFileString(e.target.files[0]);
+
+  };
+
+  const getFileString = async (file: File) => {
+    let reader = new FileReader();
+    reader.onload = (e) => {
+      let file_str = e.target?.result as string;
+
+      let file_str_chn = file_str.match(/[\u4e00-\u9fa5]+/g)?.join("") || "";
+
+      setValue(file_str_chn);
+      setFileName(file.name);
+      setFileContent(true);
+    };
+    reader.readAsText(file);
+  };
+
   return (
     <div className="relative flex w-5/6 flex-col items-center justify-center">
       <div
@@ -311,6 +344,7 @@ export const Search: FC = () => {
             }}
           />
         </div>
+        
         <div className="items-center justify-center gap-4">
           <form onSubmit={handleSubmit}>
             <div className="flex min-w-[800px] items-start justify-center gap-2 rounded-lg border bg-white px-2 py-2 ring-8 ring-zinc-300/20 focus-within:border-zinc-300">
@@ -331,12 +365,28 @@ export const Search: FC = () => {
               <textarea
                 id="query-input"
                 ref={textareaRef}
-                value={value}
+                value={fileContent ? "" : value}
                 autoFocus
                 onChange={handleInputChange}
-                placeholder="关键词/短句/长文本/表达式"
+                placeholder={fileContent ? fileName : "关键词/短句/长文本/表达式"}
                 className={`h-6 max-h-60 min-h-6 w-full flex-1 resize-y rounded-md bg-white px-2 pr-6 outline-none`}
               />
+              {searchField === "全文" && (
+              <div>
+              <button
+                type="button"
+                className="w-17 inline-flex h-6 items-center justify-center rounded-md border border-gray-300 bg-white px-2 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                onClick={() => document.getElementById('fileInput')?.click()}
+              >
+              <Upload size={16} className="mr-2" />
+                上传文档
+              </button>
+              <input
+                type="file"
+                id="fileInput"
+                style={{ display: 'none' }}
+                onChange={handleFileUpload}
+              /></div>)}
               {searchField === "全文" && (
                 <button
                   type="button"
@@ -380,6 +430,7 @@ export const Search: FC = () => {
           </form>
         </div>
         <QueryContainer queries={relatedQueries} />
+        
       </div>
       {results.length > 0 ? (
         <LawDocs documents={results} itemsPerPage={nItemsPerPage} />
