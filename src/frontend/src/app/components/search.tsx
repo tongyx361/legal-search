@@ -50,6 +50,8 @@ export const Search: FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [fileContent, setFileContent] = useState(true);
   const [fileName, setFileName] = useState<string>("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const currentSubmit = useRef<AbortController | null>(null);
 
   // References
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -142,7 +144,6 @@ export const Search: FC = () => {
 
       if (response.ok) {
         const data = await response.json();
-        console.log("Related queries:", data.results);
         if (textareaRef.current?.value !== "") setRelatedQueries(data.results);
       } else {
         console.error("Failed to fetch related queries");
@@ -173,7 +174,6 @@ export const Search: FC = () => {
   const debouncedValue = useDebounce(value, queryExpasionDelay);
 
   useEffect(() => {
-    console.log("debouncedValue: ", debouncedValue);
     if (debouncedValue === "") {
       switch (searchField) {
         case "全文":
@@ -191,12 +191,21 @@ export const Search: FC = () => {
         if (searchField === "全文") fetchRelatedQueries(debouncedValue);
       } else setRelatedQueries([]);
     }
-    // console.log("Debounced value:", debouncedValue);
   }, [debouncedValue, searchField]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    console.log("file: ", fileContent);
-    console.log("inside");
+
+    if (isSubmitting) {
+      if (currentSubmit.current) {
+        currentSubmit.current.abort();
+      }
+    }
+
+    const controler = new AbortController();
+    const sig = controler.signal;
+    currentSubmit.current = controler;
+    setIsSubmitting(true);
+
     e.preventDefault();
     if (value) {
       setResults([]);
@@ -249,7 +258,6 @@ export const Search: FC = () => {
       let end_search = false;
       try {
         do {
-          console.log("requestData:", requestData);
           const response = await fetch(apiUrl, {
             method: "POST",
             headers: {
@@ -270,6 +278,11 @@ export const Search: FC = () => {
               setSearchFinished(true);
             }
 
+            if (sig.aborted) {
+              setResults([]);
+              throw "aborted";
+            }
+            
             // Update results state
             setResults((prevResults) => [...prevResults, ...newResults]);
             if (data.index.length > 0) requestData.index = data.index.pop() + 1;
@@ -282,15 +295,17 @@ export const Search: FC = () => {
             setSearchError(response.status);
             break;
           }
-          console.log("searchFinished:", searchFinished);
-          console.log("keep search:", !searchFinished);
         } while (!end_search);
         // console.log("searchFinished:", searchFinished);
       } catch (error) {
-        console.error("Error fetching results:", error);
-        setSearchError(1);
+        if (error !== "aborted") {
+          console.error("Error fetching results:", error);
+          setSearchError(1);
+        }
       }
     }
+    setIsSubmitting(false);
+    currentSubmit.current = null;
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
