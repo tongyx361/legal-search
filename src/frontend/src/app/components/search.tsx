@@ -46,15 +46,12 @@ export const Search: FC = () => {
   const [searchFinished, setSearchFinished] = useState(false); // 搜索是否完成
   const [searchError, setSearchError] = useState(0); // 搜索错误
   const [currentPage, setCurrentPage] = useState(1);
-
-  const [file, setFile] = useState<File | null>(null);
-  const [fileContent, setFileContent] = useState(true);
   const [fileName, setFileName] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const currentSubmit = useRef<AbortController | null>(null);
 
   // References
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Components and utilies
 
@@ -75,13 +72,15 @@ export const Search: FC = () => {
     );
   };
 
-  // Dynamic textarea height
-  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setFileContent(false);
-    setValue(e.target.value);
-    const textarea = e.target;
-    textarea.style.height = "1.5rem";
-    textarea.style.height = textarea.scrollHeight + "px";
+  const handleInputChange = () => {
+    setFileName("");
+
+    if (textareaRef.current) {
+      setValue(textareaRef.current.value); // Dynamic textarea height
+      textareaRef.current.style.height = "1.5rem";
+      textareaRef.current.style.height =
+        textareaRef.current.scrollHeight + "px";
+    }
   };
 
   // Query recommendation and expansion
@@ -104,19 +103,10 @@ export const Search: FC = () => {
             key={index}
             className="flex-initial flex-wrap items-center justify-center rounded-lg border border-gray-200 bg-white p-2 text-xs font-medium text-gray-700 shadow-md hover:bg-gray-50 hover:text-gray-900"
             onClick={() => {
-              if (textareaRef.current) {
-                textareaRef.current!.value = query; // Replace
-                // textareaRef.current!.value +=
-                // textareaRef.current!.value === "" ? query : ` ${query}`; // Append
-                const event = new Event("input", { bubbles: true });
-                Object.defineProperty(event, "target", {
-                  value: textareaRef.current,
-                });
-
-                handleInputChange(
-                  event as unknown as React.ChangeEvent<HTMLTextAreaElement>,
-                );
-              }
+              textareaRef.current!.value = query; // Replace
+              // textareaRef.current!.value +=
+              // textareaRef.current!.value === "" ? query : ` ${query}`; // Append
+              handleInputChange();
             }}
           >
             {query}
@@ -187,144 +177,139 @@ export const Search: FC = () => {
           break;
       }
     } else {
-      if (!fileContent) {
+      console.log("debouncedValue:", debouncedValue);
+      console.log("fileName:", fileName);
+      if (!fileName) {
         if (searchField === "全文") fetchRelatedQueries(debouncedValue);
       } else setRelatedQueries([]);
     }
-  }, [debouncedValue, searchField]);
+  }, [debouncedValue]);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const initSearch = () => {
+    setResults([]);
+    setSearchFinished(false);
+    setSearchError(0);
+    setCurrentPage(1);
+  };
 
-    if (isSubmitting) {
-      if (currentSubmit.current) {
-        currentSubmit.current.abort();
-      }
+  const fetchData = async (
+    searchField: string,
+    value: string,
+    fuzzySearch: boolean,
+    judgeFilter: string,
+    lawFilter: string,
+  ) => {
+    if (isSubmitting && abortControllerRef.current) {
+      console.log("Aborting previous search with", abortControllerRef.current);
+      abortControllerRef.current.abort();
     }
 
-    const controler = new AbortController();
-    const sig = controler.signal;
-    currentSubmit.current = controler;
+    abortControllerRef.current = new AbortController();
+    const sig = abortControllerRef.current.signal;
     setIsSubmitting(true);
 
-    e.preventDefault();
-    if (value) {
-      setResults([]);
-      setSearchFinished(false);
-      setSearchError(0);
-      setCurrentPage(1);
-      let apiUrl: string = rootUrl;
-      let requestData: { [key: string]: any } = {};
-      let ndoc =
-        !fuzzySearch ||
-        judgeFilter.length > 0 ||
-        lawFilter.length > 0 ||
-        fileContent
-          ? 1
-          : 2;
-      let total_num: number = 0;
+    initSearch();
+    let apiUrl: string = rootUrl;
+    let ndoc = 1;
 
-      switch (searchField) {
-        case "全文":
-          apiUrl += "/query";
-          requestData = {
-            query: value,
-            mode: fuzzySearch ? "blurred" : "accurate",
-            judge: judgeFilter,
-            law: lawFilter,
-            index: 0,
-            ndoc: ndoc,
-          };
-          break;
-        case "法官（模糊）":
-          apiUrl += "/query-judge";
-          requestData = {
-            query: value,
-            index: 0,
-            ndoc: ndoc,
-          };
-          break;
-        case "法条（模糊）":
-          apiUrl += "/query-laws";
-          requestData = {
-            query: value,
-            index: 0,
-            ndoc: ndoc,
-          };
-          break;
-        default:
-          break;
-      }
+    let requestData: { [key: string]: any } = {
+      query: value,
+      index: 0,
+      ndoc: ndoc,
+    };
 
-      let end_search = false;
-      try {
-        do {
-          const response = await fetch(apiUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(requestData),
-          });
+    switch (searchField) {
+      case "全文":
+        apiUrl += "/query";
+        requestData = {
+          ...requestData,
+          mode: fuzzySearch ? "blurred" : "accurate",
+          judge: judgeFilter,
+          law: lawFilter,
+        };
+        break;
+      case "法官（模糊）":
+        apiUrl += "/query-judge";
+        break;
+      case "法条（模糊）":
+        apiUrl += "/query-laws";
+        break;
+      default:
+        break;
+    }
 
-          if (response.ok) {
-            const data = await response.json();
-            let newResults = data.results;
-            for (let i = 0; i < newResults.length; i++) {
-              newResults[i].expanded = false;
-            }
+    let total_num: number = 0;
+    let end_search = false;
+    try {
+      do {
+        console.log("apiUrl:", apiUrl);
+        console.log("requestData:", requestData);
+        const response = await fetch(apiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestData),
+        });
 
-            if (data.index.length === 0) {
-              end_search = true;
-              setSearchFinished(true);
-            }
-
-            if (sig.aborted) {
-              setResults([]);
-              throw "aborted";
-            }
-            
-            // Update results state
-            setResults((prevResults) => [...prevResults, ...newResults]);
-            if (data.index.length > 0) requestData.index = data.index.pop() + 1;
-            requestData.ndoc = 2 * requestData.ndoc;
-            total_num = data.total_num;
-            // console.log("results.length:", results.length);
-            // console.log("requestData.index:", requestData.index);
-          } else {
-            console.error("Failed to fetch results");
-            setSearchError(response.status);
-            break;
+        if (response.ok) {
+          const data = await response.json();
+          console.log("data:", data);
+          let newResults = data.results;
+          for (let i = 0; i < newResults.length; i++) {
+            newResults[i].expanded = false;
           }
-        } while (!end_search);
-        // console.log("searchFinished:", searchFinished);
-      } catch (error) {
-        if (error !== "aborted") {
-          console.error("Error fetching results:", error);
-          setSearchError(1);
+
+          if (data.results.length === 0) {
+            end_search = true;
+            setSearchFinished(true);
+          }
+
+          if (sig.aborted) {
+            console.log("Aborted by", abortControllerRef.current);
+            setResults([]);
+            throw "aborted";
+          }
+          // Update results state
+          setResults((prevResults) => [...prevResults, ...newResults]);
+          if (data.index.length > 0) requestData.index = data.index.pop() + 1;
+          requestData.ndoc = 2 * requestData.ndoc;
+          total_num = data.total_num;
+          // console.log("results.length:", results.length);
+          // console.log("requestData.index:", requestData.index);
+        } else {
+          console.error("Failed to fetch results");
+          setSearchError(response.status);
+          break;
         }
+      } while (!end_search);
+      // console.log("searchFinished:", searchFinished);
+    } catch (error) {
+      if (error !== "aborted") {
+        console.error("Error fetching results:", error);
+        setSearchError(1);
       }
     }
     setIsSubmitting(false);
-    currentSubmit.current = null;
+    abortControllerRef.current = null;
+  };
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (value)
+      fetchData(searchField, value, fuzzySearch, judgeFilter, lawFilter);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     if (e.target.files.length === 0) return;
-    setFile(e.target.files[0]);
-    getFileString(e.target.files[0]);
-  };
-
-  const getFileString = async (file: File) => {
-    let reader = new FileReader();
+    const file = e.target.files[0];
+    const reader = new FileReader();
     reader.onload = (e) => {
-      let file_str = e.target?.result as string;
-
-      let file_str_chn = file_str.match(/[\u4e00-\u9fa5]+/g)?.join("") || "";
-
+      const file_str = e.target?.result as string;
+      const file_str_chn = file_str.match(/[\u4e00-\u9fa5]+/g)?.join("") || "";
       setValue(file_str_chn);
       setFileName(file.name);
-      setFileContent(true);
     };
     reader.readAsText(file);
   };
@@ -393,23 +378,16 @@ export const Search: FC = () => {
           <button
             className="m-2 flex items-center rounded-md border bg-green-200 p-2"
             onClick={() => {
-              setSearchField("全文");
-              textareaRef.current!.value = document.full;
-              const eInput = new Event("input", { bubbles: true });
-              Object.defineProperty(eInput, "target", {
-                value: textareaRef.current,
-              });
-              handleInputChange(
-                eInput as unknown as React.ChangeEvent<HTMLTextAreaElement>,
-              );
+              const searchField = "全文";
+              setSearchField(searchField);
+              const query = document.full;
               setFuzzySearch(true);
               setJudgeFilter("");
               setLawFilter("");
               setFilterOpen(false);
-              const eSubmit = new Event("submit", { bubbles: true });
-              handleSubmit(
-                eSubmit as unknown as React.FormEvent<HTMLFormElement>,
-              );
+              textareaRef.current!.value = query;
+              handleInputChange();
+              fetchData(searchField, query, true, "", "");
             }}
           >
             相似案例
@@ -417,23 +395,13 @@ export const Search: FC = () => {
           <button
             className="m-2 flex items-center rounded-md border bg-blue-200 p-2"
             onClick={() => {
-              setSearchField("法官（模糊）");
-              textareaRef.current!.value = document.judges.join(" ");
-              const eInput = new Event("input", { bubbles: true });
-              Object.defineProperty(eInput, "target", {
-                value: textareaRef.current,
-              });
-              handleInputChange(
-                eInput as unknown as React.ChangeEvent<HTMLTextAreaElement>,
-              );
-              setFuzzySearch(true);
-              setJudgeFilter("");
-              setLawFilter("");
-              setFilterOpen(false);
-              const eSubmit = new Event("submit", { bubbles: true });
-              handleSubmit(
-                eSubmit as unknown as React.FormEvent<HTMLFormElement>,
-              );
+              const searchField = "法官（模糊）";
+              setSearchField(searchField);
+              const query = document.judges.join(" ");
+              setValue(query);
+              textareaRef.current!.value = query;
+              handleInputChange();
+              fetchData(searchField, query, true, "", "");
             }}
           >
             相似法官案例
@@ -441,23 +409,13 @@ export const Search: FC = () => {
           <button
             className="m-2 flex items-center rounded-md border bg-teal-200 p-2"
             onClick={() => {
-              setSearchField("法条（模糊）");
-              textareaRef.current!.value = document.laws.join(" ");
-              const eInput = new Event("input", { bubbles: true });
-              Object.defineProperty(eInput, "target", {
-                value: textareaRef.current,
-              });
-              handleInputChange(
-                eInput as unknown as React.ChangeEvent<HTMLTextAreaElement>,
-              );
-              setFuzzySearch(true);
-              setJudgeFilter("");
-              setLawFilter("");
-              setFilterOpen(false);
-              const eSubmit = new Event("submit", { bubbles: true });
-              handleSubmit(
-                eSubmit as unknown as React.FormEvent<HTMLFormElement>,
-              );
+              const searchField = "法条（模糊）";
+              setSearchField(searchField);
+              const query = document.laws.join(" ");
+              setValue(query);
+              textareaRef.current!.value = query;
+              handleInputChange();
+              fetchData(searchField, query, true, "", "");
             }}
           >
             相似法条案例
@@ -549,10 +507,6 @@ export const Search: FC = () => {
       paginationRef.current?.scrollIntoView({ behavior: "smooth" });
     };
 
-    useEffect(() => {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }, [currentPage]);
-
     // Pagination component
     const Pagination: FC<{
       currentPage: number;
@@ -620,7 +574,8 @@ export const Search: FC = () => {
         <div className="flex gap-2 text-blue-500">
           {
             <>
-              <BookText></BookText> 检索结果 （共 {documents.length} 条）
+              <BookText></BookText> 检索结果
+              {searchFinished ? `（共 ${documents.length} 条）` : ""}
             </>
           }
         </div>
@@ -707,13 +662,11 @@ export const Search: FC = () => {
               <textarea
                 id="query-input"
                 ref={textareaRef}
-                value={fileContent ? "" : value}
+                value={fileName || value}
                 autoFocus
                 onChange={handleInputChange}
-                placeholder={
-                  fileContent ? fileName : "关键词/短句/长文本/表达式"
-                }
-                className={`h-6 max-h-60 min-h-6 w-full flex-1 resize-y rounded-md bg-white px-2 pr-6 outline-none`}
+                placeholder={fileName || "关键词/短句/长文本/表达式"}
+                className="h-6 max-h-60 min-h-6 w-full flex-1 resize-y rounded-md bg-white px-2 pr-6 outline-none"
               />
               {searchField === "全文" && (
                 <div>

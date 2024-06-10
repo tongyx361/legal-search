@@ -6,13 +6,13 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "司法文书搜索",
+  title: "司法文书检索",
   description: "测试版",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="zh">
       <body className={inter.className}>{children}</body>
     </html>
   );
